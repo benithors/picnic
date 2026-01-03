@@ -1,12 +1,26 @@
 import SwiftUI
+import ServiceManagement
 
 struct SettingsView: View {
     @AppStorage("Picnic.SaveDirectory") private var saveDirectory: String = ""
+    @State private var launchAtLogin: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             Text("General")
                 .font(.headline)
+            
+            Toggle("Start Picnic at login", isOn: Binding(
+                get: { launchAtLogin },
+                set: { newValue in
+                    launchAtLogin = newValue
+                    if newValue {
+                        try? SMAppService.mainApp.register()
+                    } else {
+                        try? SMAppService.mainApp.unregister()
+                    }
+                }
+            ))
             
             VStack(alignment: .leading, spacing: 8) {
                 Text("Save Screenshots To:")
@@ -42,7 +56,10 @@ struct SettingsView: View {
             Spacer()
         }
         .padding(20)
-        .frame(width: 450, height: 180)
+        .frame(width: 450, height: 220)
+        .onAppear {
+            launchAtLogin = SMAppService.mainApp.status == .enabled
+        }
     }
 
     private var displayPath: String {
