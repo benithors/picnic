@@ -1,7 +1,7 @@
 import AppKit
 
 final class AppState {
-    private let hotKeyManager = HotKeyManager()
+    private let hotKeyManager = HotKeyManager.shared
     private var overlayController: OverlayWindowController?
 
     func start() {

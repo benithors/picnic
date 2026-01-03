@@ -1,17 +1,32 @@
 import Carbon
+import Cocoa
 import Foundation
 
+struct SavedShortcut: Codable, Equatable {
+    let keyCode: UInt32
+    let modifiers: UInt32
+    let displayString: String
+}
+
 final class HotKeyManager {
+    static let shared = HotKeyManager()
+    
     enum HotKeyID: Int {
-        case capturePrimary = 1
-        case captureFallback = 2
+        case capture = 1
     }
 
-    private var hotKeyRefs: [EventHotKeyRef?] = []
+    private var hotKeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
     var onCapture: (() -> Void)?
+    
+    private let shortcutKey = "Picnic.CaptureShortcut"
+
+    init() {
+        // Load initial shortcut or default
+    }
 
     func registerHotKeys() {
+        // Install event handler once
         var eventSpec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
         let handler: EventHandlerUPP = { _, event, userData in
             guard let userData = userData else { return noErr }
@@ -27,7 +42,7 @@ final class HotKeyManager {
                 &hotKeyID
             )
             if status == noErr {
-                if hotKeyID.id == HotKeyID.capturePrimary.rawValue || hotKeyID.id == HotKeyID.captureFallback.rawValue {
+                if hotKeyID.id == UInt32(HotKeyID.capture.rawValue) {
                     manager.onCapture?()
                 }
             }
@@ -43,15 +58,93 @@ final class HotKeyManager {
             &eventHandlerRef
         )
 
-        registerHotKey(keyCode: UInt32(kVK_Help), modifiers: UInt32(controlKey), id: .capturePrimary)
-        registerHotKey(keyCode: UInt32(kVK_ANSI_5), modifiers: UInt32(controlKey | shiftKey), id: .captureFallback)
+        loadAndRegister()
     }
-
-    private func registerHotKey(keyCode: UInt32, modifiers: UInt32, id: HotKeyID) {
-        var hotKeyRef: EventHotKeyRef?
-        let hotKeyID = EventHotKeyID(signature: OSType("SNAI".fourCharCodeValue), id: UInt32(id.rawValue))
+    
+    func loadAndRegister() {
+        unregisterCurrent()
+        
+        if let data = UserDefaults.standard.data(forKey: shortcutKey),
+           let shortcut = try? JSONDecoder().decode(SavedShortcut.self, from: data) {
+            register(keyCode: shortcut.keyCode, modifiers: shortcut.modifiers)
+        } else {
+            // Default: Shift + Cmd + 5 (kVK_ANSI_5 = 0x17)
+            // Carbon modifiers: cmdKey (256) + shiftKey (512)
+            let defaultKeyCode: UInt32 = 0x17 // kVK_ANSI_5
+            let defaultModifiers = UInt32(cmdKey | shiftKey)
+            register(keyCode: defaultKeyCode, modifiers: defaultModifiers)
+        }
+    }
+    
+    func saveShortcut(keyCode: UInt32, modifiers: NSEvent.ModifierFlags, characters: String?) {
+        let carbonModifiers = Self.convertToCarbonModifiers(modifiers)
+        let display = Self.shortcutString(modifiers: modifiers, characters: characters, keyCode: keyCode)
+        
+        let shortcut = SavedShortcut(keyCode: keyCode, modifiers: carbonModifiers, displayString: display)
+        if let data = try? JSONEncoder().encode(shortcut) {
+            UserDefaults.standard.set(data, forKey: shortcutKey)
+            loadAndRegister()
+        }
+    }
+    
+    private func register(keyCode: UInt32, modifiers: UInt32) {
+        let hotKeyID = EventHotKeyID(signature: OSType("SNAI".fourCharCodeValue), id: UInt32(HotKeyID.capture.rawValue))
         RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
-        hotKeyRefs.append(hotKeyRef)
+    }
+    
+    private func unregisterCurrent() {
+        if let ref = hotKeyRef {
+            UnregisterEventHotKey(ref)
+            hotKeyRef = nil
+        }
+    }
+    
+    static func convertToCarbonModifiers(_ flags: NSEvent.ModifierFlags) -> UInt32 {
+        var modifiers: UInt32 = 0
+        if flags.contains(.command) { modifiers |= UInt32(cmdKey) }
+        if flags.contains(.option) { modifiers |= UInt32(optionKey) }
+        if flags.contains(.control) { modifiers |= UInt32(controlKey) }
+        if flags.contains(.shift) { modifiers |= UInt32(shiftKey) }
+        return modifiers
+    }
+    
+    static func shortcutString(modifiers: NSEvent.ModifierFlags, characters: String?, keyCode: UInt32) -> String {
+        var string = ""
+        if modifiers.contains(.control) { string += "⌃" }
+        if modifiers.contains(.option) { string += "⌥" }
+        if modifiers.contains(.shift) { string += "⇧" }
+        if modifiers.contains(.command) { string += "⌘" }
+        
+        if let chars = characters?.uppercased(), !chars.isEmpty {
+             // Handle some special keys if needed, otherwise use chars
+             // A better approach is using the key code to map to display strings for special keys
+             string += keyString(for: keyCode) ?? chars
+        }
+        
+        return string
+    }
+    
+    private static func keyString(for keyCode: UInt32) -> String? {
+        // Partial mapping for common special keys
+        switch Int(keyCode) {
+        case kVK_Return: return "↩"
+        case kVK_Space: return "Space"
+        case kVK_Delete: return "⌫"
+        case kVK_Escape: return "Esc"
+        case kVK_F1: return "F1"
+        case kVK_F2: return "F2"
+        case kVK_F3: return "F3"
+        case kVK_F4: return "F4"
+        case kVK_F5: return "F5"
+        case kVK_F6: return "F6"
+        case kVK_F7: return "F7"
+        case kVK_F8: return "F8"
+        case kVK_F9: return "F9"
+        case kVK_F10: return "F10"
+        case kVK_F11: return "F11"
+        case kVK_F12: return "F12"
+        default: return nil
+        }
     }
 }
 

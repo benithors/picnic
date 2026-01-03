@@ -20,7 +20,7 @@ struct EditorView: View {
                     .interpolation(.high)
                     .frame(width: proxy.size.width, height: proxy.size.height)
 
-                MouseTrackingView { point in
+                MouseTrackingView(tool: model.tool) { point in
                     if !toolbarFrame.contains(point) {
                         model.updateCursorPoint(point)
                     }
@@ -142,7 +142,7 @@ struct EditorView: View {
                     ))
                     .textFieldStyle(.plain)
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(.red)
                     .lineLimit(1)
                     .fixedSize()
                     .padding(.horizontal, 6)
@@ -162,7 +162,7 @@ struct EditorView: View {
                 } else {
                     Text(text.text)
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(.red)
                         .lineLimit(1)
                         .fixedSize()
                         .padding(.horizontal, 6)

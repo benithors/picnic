@@ -21,7 +21,17 @@ enum OutputManager {
         pasteboard.writeObjects([image])
     }
 
+    private static let saveDirectoryKey = "Picnic.SaveDirectory"
+
     private static func outputDirectory() throws -> URL {
+        if let path = UserDefaults.standard.string(forKey: saveDirectoryKey) {
+            let url = URL(fileURLWithPath: path)
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
+                return url
+            }
+        }
+
         let base = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first ??
             URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Pictures")
         let folder = base.appendingPathComponent(folderName)

@@ -50,7 +50,7 @@ enum ImageComposer {
         for text in texts {
             let attributes: [NSAttributedString.Key: Any] = [
                 .font: font,
-                .foregroundColor: NSColor.white,
+                .foregroundColor: NSColor.systemRed,
                 .backgroundColor: NSColor.black.withAlphaComponent(0.35)
             ]
             let attributed = NSAttributedString(string: text.text, attributes: attributes)

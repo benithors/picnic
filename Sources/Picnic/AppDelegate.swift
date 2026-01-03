@@ -1,8 +1,10 @@
 import AppKit
+import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let appState = AppState()
     private var statusItem: NSStatusItem?
+    private var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -20,6 +22,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let captureItem = NSMenuItem(title: "Capture", action: #selector(handleCapture), keyEquivalent: "")
         captureItem.target = self
         menu.addItem(captureItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        let prefsItem = NSMenuItem(title: "Preferences...", action: #selector(handlePreferences), keyEquivalent: ",")
+        prefsItem.target = self
+        menu.addItem(prefsItem)
+        
+        menu.addItem(NSMenuItem.separator())
+
         let aboutItem = NSMenuItem(title: "About Benjamin Thorstensen", action: #selector(handleAbout), keyEquivalent: "")
         aboutItem.target = self
         menu.addItem(aboutItem)
@@ -31,6 +42,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         item.menu = menu
         statusItem = item
+    }
+
+    @objc private func handlePreferences() {
+        if settingsWindow == nil {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 450, height: 150),
+                styleMask: [.titled, .closable, .miniaturizable],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = "Picnic Preferences"
+            window.contentView = NSHostingView(rootView: SettingsView())
+            window.center()
+            window.isReleasedWhenClosed = false
+            settingsWindow = window
+        }
+        
+        settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func handleAbout() {
