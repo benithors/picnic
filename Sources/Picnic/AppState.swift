@@ -30,11 +30,24 @@ final class AppState {
             AlertPresenter.showErrorAlert(message: "Failed to capture the main display.")
             return
         }
+        playCaptureSound()
 
         overlayController = OverlayWindowController(image: image) { [weak self] in
             self?.overlayController = nil
         }
         overlayController?.show()
+    }
+
+    private func playCaptureSound() {
+        if let shutter = NSSound(named: NSSound.Name("cameraShutter")) {
+            shutter.play()
+            return
+        }
+        if let fallback = NSSound(named: NSSound.Name("Glass")) {
+            fallback.play()
+            return
+        }
+        NSSound.beep()
     }
 }
 

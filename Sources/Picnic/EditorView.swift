@@ -38,6 +38,8 @@ struct EditorView: View {
                         .allowsHitTesting(false)
                 }
 
+                editingOutline
+
                 toolbar
 
                 Button(action: onClose) {
@@ -73,7 +75,23 @@ struct EditorView: View {
         }
     }
 
+    private var editingOutline: some View {
+        Rectangle()
+            .stroke(Color(red: 0.15, green: 0.82, blue: 0.72).opacity(0.9), lineWidth: 4)
+            .allowsHitTesting(false)
+    }
+
     private var toolbar: some View {
+        HStack {
+            Spacer()
+            toolbarContent
+            Spacer()
+        }
+        .padding(.top, 16)
+        .padding(.horizontal, 16)
+    }
+
+    private var toolbarContent: some View {
         HStack(spacing: 12) {
             toolButton(title: "Select", systemImage: "cursorarrow", tool: .select, shortcutKey: "1")
             toolButton(title: "Crop", systemImage: "crop", tool: .crop, shortcutKey: "2")
@@ -96,8 +114,6 @@ struct EditorView: View {
         .padding(.vertical, 10)
         .background(VisualEffectView(material: .hudWindow, blendingMode: .withinWindow))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .padding(.top, 16)
-        .padding(.leading, 16)
         .background(
             GeometryReader { proxy in
                 Color.clear
