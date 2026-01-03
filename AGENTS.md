@@ -2,8 +2,8 @@
 
 ## Project Structure & Module Organization
 - `Package.swift` defines a SwiftPM macOS app (minimum macOS 13) with a single executable target.
-- `Sources/ScreenshotAI/` contains all Swift source files for the app (status bar UI, capture pipeline, editor, etc.).
-- `Sources/ScreenshotAI/Resources/` holds bundled assets like `AppIcon.icns` and `picniclogo.png`.
+- `Sources/Picnic/` contains all Swift source files for the app (status bar UI, capture pipeline, editor, etc.).
+- `Sources/Picnic/Resources/` holds bundled assets like `AppIcon.icns` and `picniclogo.png`.
 - `build/` and `buildandcopy-logs/` are generated artifacts; keep them out of reviews unless debugging builds.
 
 ## Build, Test, and Development Commands

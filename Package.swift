@@ -12,7 +12,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "ScreenshotAI",
-            path: "Sources/ScreenshotAI",
+            path: "Sources/Picnic",
             resources: [
                 .process("Resources")
             ]

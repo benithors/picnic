@@ -196,8 +196,8 @@ cat > "${contents_dir}/Info.plist" <<EOF
 </plist>
 EOF
 
-if [[ -f "${PWD}/Sources/ScreenshotAI/Resources/AppIcon.icns" ]]; then
-    cp -f "${PWD}/Sources/ScreenshotAI/Resources/AppIcon.icns" "${resources_dir}/AppIcon.icns"
+if [[ -f "${PWD}/Sources/Picnic/Resources/AppIcon.icns" ]]; then
+    cp -f "${PWD}/Sources/Picnic/Resources/AppIcon.icns" "${resources_dir}/AppIcon.icns"
 fi
 
 for bundle in "$bin_path"/*.bundle(N); do
