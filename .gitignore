@@ -1,0 +1,20 @@
+# macOS
+.DS_Store
+
+# SwiftPM
+.build/
+.swiftpm/
+
+# Local build outputs
+build/
+*.app
+
+# Logs
+buildandcopy-logs/
+
+# Local env
+.env
+.env.*
+
+# Local signing identity
+.signing-identity

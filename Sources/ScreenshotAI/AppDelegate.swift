@@ -1,0 +1,81 @@
+import AppKit
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let appState = AppState()
+    private var statusItem: NSStatusItem?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+        setupStatusItem()
+        appState.start()
+    }
+
+    private func setupStatusItem() {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        if let button = item.button {
+            button.image = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "Picnic")
+        }
+
+        let menu = NSMenu()
+        let captureItem = NSMenuItem(title: "Capture", action: #selector(handleCapture), keyEquivalent: "")
+        captureItem.target = self
+        menu.addItem(captureItem)
+        let aboutItem = NSMenuItem(title: "About Benjamin Thorstensen", action: #selector(handleAbout), keyEquivalent: "")
+        aboutItem.target = self
+        menu.addItem(aboutItem)
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem.separator())
+        let quitItem = NSMenuItem(title: "Quit Picnic", action: #selector(handleQuit), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+
+        item.menu = menu
+        statusItem = item
+    }
+
+    @objc private func handleAbout() {
+        let alert = NSAlert()
+        alert.messageText = "About Benjamin Thorstensen"
+        alert.informativeText = ""
+
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .centerX
+        stack.spacing = 10
+
+        if let logo = loadPicnicLogo() {
+            let imageView = NSImageView(image: logo)
+            imageView.imageScaling = .scaleProportionallyUpOrDown
+            imageView.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                imageView.widthAnchor.constraint(equalToConstant: 72),
+                imageView.heightAnchor.constraint(equalToConstant: 72)
+            ])
+            stack.addArrangedSubview(imageView)
+        }
+
+        let label = NSTextField(labelWithString: "✨ Hi! Say hello anytime.\n🌐 kylo.at")
+        label.alignment = .center
+        label.maximumNumberOfLines = 0
+        stack.addArrangedSubview(label)
+
+        alert.accessoryView = stack
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    private func loadPicnicLogo() -> NSImage? {
+        guard let url = Bundle.module.url(forResource: "picniclogo", withExtension: "png") else {
+            return nil
+        }
+        return NSImage(contentsOf: url)
+    }
+
+    @objc private func handleCapture() {
+        appState.triggerCapture()
+    }
+
+    @objc private func handleQuit() {
+        NSApp.terminate(nil)
+    }
+}

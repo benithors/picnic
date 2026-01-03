@@ -1,0 +1,219 @@
+#!/bin/zsh
+set -euo pipefail
+
+app_name="Picnic"
+build_mode="dev"
+configuration_name="debug"
+verbose=0
+log_dir="${PWD}/buildandcopy-logs"
+timestamp="$(date +"%Y%m%d-%H%M%S")"
+log_file="${log_dir}/buildandcopy-${timestamp}.log"
+sign_identity="${SIGN_IDENTITY:-}"
+identity_file="${PWD}/.signing-identity"
+
+bundle_id_default="com.${USER:-user}.${app_name}"
+bundle_id="${BUNDLE_ID:-$bundle_id_default}"
+bundle_id="$(echo "$bundle_id" | tr '[:upper:]' '[:lower:]')"
+
+usage() {
+    cat <<'EOF'
+Usage: buildandcopy [options]
+
+Modes:
+  --dev, --debug, -d         Dev build (Debug). Default.
+  --prod, --release, -p      Prod build (Release).
+
+Options:
+  --bundle-id <id>           Override CFBundleIdentifier (default: com.$USER.Picnic)
+  --sign-id <identity>       Codesign identity for stable permissions (e.g. "Apple Development: Name (TEAMID)")
+  --verbose, -v              Stream full build output to stdout.
+  --help, -h                 Show this help.
+EOF
+}
+
+discover_keychain_identity() {
+    local candidates
+    local count
+    candidates="$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/"Apple Development:|Developer ID Application:/{print $2}')"
+    count="$(printf '%s\n' "$candidates" | sed '/^$/d' | wc -l | tr -d ' ')"
+    if [[ "$count" -eq 1 ]]; then
+        printf '%s\n' "$candidates" | sed '/^$/d'
+        return 0
+    fi
+    return 1
+}
+
+print_summary() {
+    local log_path="$1"
+    local max_lines=40
+    local summary
+    summary=$(grep -nE 'error:|warning:' "$log_path" | tail -n "$max_lines" || true)
+    if [[ -n "$summary" ]]; then
+        echo "Errors/Warnings (last ${max_lines}):"
+        echo "$summary"
+    else
+        echo "No error/warning lines found in log."
+    fi
+}
+
+run_cmd() {
+    local label="$1"
+    shift
+
+    {
+        echo ""
+        echo "=== ${label} ($(date)) ==="
+        echo "$*"
+    } >> "$log_file"
+
+    if [[ "$verbose" -eq 1 ]]; then
+        if "$@" 2>&1 | tee -a "$log_file"; then
+            return 0
+        else
+            local exit_status=$?
+            echo "Command failed. Log: $log_file"
+            print_summary "$log_file"
+            exit "$exit_status"
+        fi
+    else
+        if "$@" >>"$log_file" 2>&1; then
+            return 0
+        else
+            local exit_status=$?
+            echo "Command failed. Log: $log_file"
+            print_summary "$log_file"
+            exit "$exit_status"
+        fi
+    fi
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dev|--debug|-d)
+            build_mode="dev"
+            configuration_name="debug"
+            shift
+            ;;
+        --prod|--release|-p)
+            build_mode="prod"
+            configuration_name="release"
+            shift
+            ;;
+        --bundle-id)
+            bundle_id="$2"
+            bundle_id="$(echo "$bundle_id" | tr '[:upper:]' '[:lower:]')"
+            shift 2
+            ;;
+        --sign-id)
+            sign_identity="$2"
+            shift 2
+            ;;
+        --verbose|-v)
+            verbose=1
+            shift
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown argument: $1" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [[ -z "$sign_identity" && -f "$identity_file" ]]; then
+    sign_identity="$(head -n 1 "$identity_file" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    if [[ -n "$sign_identity" ]]; then
+        echo "Using signing identity from ${identity_file}: $sign_identity"
+    fi
+fi
+
+if [[ -z "$sign_identity" ]]; then
+    if sign_identity="$(discover_keychain_identity)"; then
+        echo "Using signing identity from keychain: $sign_identity"
+    else
+        echo "Warning: no signing identity found. Ad-hoc signing can reset Screen Recording permission between builds."
+        echo "Set SIGN_IDENTITY, pass --sign-id, or create ${identity_file} with a codesign identity."
+    fi
+fi
+
+mkdir -p "$log_dir"
+mkdir -p "${PWD}/build"
+
+echo "Building ${build_mode} (${configuration_name}) configuration..."
+echo "Log: $log_file"
+run_cmd "build" swift build -c "$configuration_name" --product "$app_name"
+
+bin_path=$(swift build -c "$configuration_name" --show-bin-path)
+app_binary="${bin_path}/${app_name}"
+
+if [[ ! -x "$app_binary" ]]; then
+    echo "Built binary not found at: $app_binary" >&2
+    exit 1
+fi
+
+app_bundle="${PWD}/build/${app_name}.app"
+contents_dir="${app_bundle}/Contents"
+macos_dir="${contents_dir}/MacOS"
+resources_dir="${contents_dir}/Resources"
+
+rm -rf "$app_bundle"
+mkdir -p "$macos_dir"
+mkdir -p "$resources_dir"
+
+cp -f "$app_binary" "$macos_dir/${app_name}"
+chmod +x "$macos_dir/${app_name}"
+
+cat > "${contents_dir}/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>${app_name}</string>
+    <key>CFBundleDisplayName</key>
+    <string>${app_name}</string>
+    <key>CFBundleIdentifier</key>
+    <string>${bundle_id}</string>
+    <key>CFBundleExecutable</key>
+    <string>${app_name}</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+</dict>
+</plist>
+EOF
+
+if [[ -f "${PWD}/Sources/ScreenshotAI/Resources/AppIcon.icns" ]]; then
+    cp -f "${PWD}/Sources/ScreenshotAI/Resources/AppIcon.icns" "${resources_dir}/AppIcon.icns"
+fi
+
+for bundle in "$bin_path"/*.bundle(N); do
+    cp -R "$bundle" "$resources_dir/"
+done
+
+if [[ -n "$sign_identity" ]]; then
+    echo "Signing app bundle with identity: $sign_identity"
+    codesign --force --deep --sign "$sign_identity" "$app_bundle"
+else
+    echo "Ad-hoc signing app bundle..."
+    echo "Note: ad-hoc signatures can cause Screen Recording permission to reset between builds."
+    codesign --force --deep --sign - "$app_bundle"
+fi
+
+rm -rf "/Applications/${app_name}.app"
+cp -R "$app_bundle" /Applications/
+
+echo "App installed to /Applications/${app_name}.app"
