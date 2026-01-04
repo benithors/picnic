@@ -6,6 +6,13 @@
 
 A tiny macOS menu bar app for fast screenshots with simple markup (crop, arrows, text).
 
+## Installation
+
+```sh
+brew tap benithors/tap
+brew install picnic
+```
+
 ## Usage
 
 1. Build and run:
