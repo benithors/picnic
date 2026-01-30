@@ -10,7 +10,7 @@ enum ImageComposer {
     ) -> NSImage? {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
 
-        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+        let scale = image.size.width > 0 ? CGFloat(cgImage.width) / image.size.width : 1.0
         let fullSize = image.size
         let outputRect = cropRect ?? CGRect(origin: .zero, size: fullSize)
         let outputSize = outputRect.size

@@ -13,11 +13,17 @@ final class HotKeyManager {
     
     enum HotKeyID: Int {
         case capture = 1
+        case selectionCopy = 2
+        case selectionCancel = 3
     }
 
     private var hotKeyRef: EventHotKeyRef?
+    private var selectionCopyHotKeyRef: EventHotKeyRef?
+    private var selectionCancelHotKeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
     var onCapture: (() -> Void)?
+    var onSelectionCopy: (() -> Void)?
+    var onSelectionCancel: (() -> Void)?
     
     private let shortcutKey = "Picnic.CaptureShortcut"
 
@@ -44,6 +50,10 @@ final class HotKeyManager {
             if status == noErr {
                 if hotKeyID.id == UInt32(HotKeyID.capture.rawValue) {
                     manager.onCapture?()
+                } else if hotKeyID.id == UInt32(HotKeyID.selectionCopy.rawValue) {
+                    manager.onSelectionCopy?()
+                } else if hotKeyID.id == UInt32(HotKeyID.selectionCancel.rawValue) {
+                    manager.onSelectionCancel?()
                 }
             }
             return noErr
@@ -96,6 +106,27 @@ final class HotKeyManager {
         if let ref = hotKeyRef {
             UnregisterEventHotKey(ref)
             hotKeyRef = nil
+        }
+    }
+
+    func registerSelectionHotKeys() {
+        unregisterSelectionHotKeys()
+
+        let copyID = EventHotKeyID(signature: OSType("SNAI".fourCharCodeValue), id: UInt32(HotKeyID.selectionCopy.rawValue))
+        RegisterEventHotKey(UInt32(kVK_ANSI_C), UInt32(cmdKey), copyID, GetApplicationEventTarget(), 0, &selectionCopyHotKeyRef)
+
+        let cancelID = EventHotKeyID(signature: OSType("SNAI".fourCharCodeValue), id: UInt32(HotKeyID.selectionCancel.rawValue))
+        RegisterEventHotKey(UInt32(kVK_Escape), 0, cancelID, GetApplicationEventTarget(), 0, &selectionCancelHotKeyRef)
+    }
+
+    func unregisterSelectionHotKeys() {
+        if let ref = selectionCopyHotKeyRef {
+            UnregisterEventHotKey(ref)
+            selectionCopyHotKeyRef = nil
+        }
+        if let ref = selectionCancelHotKeyRef {
+            UnregisterEventHotKey(ref)
+            selectionCancelHotKeyRef = nil
         }
     }
     

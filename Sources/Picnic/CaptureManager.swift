@@ -28,7 +28,8 @@ enum CaptureManager {
     static func captureMainDisplay() -> NSImage? {
         let displayID = CGMainDisplayID()
         guard let cgImage = CGDisplayCreateImage(displayID) else { return nil }
-        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+        let screenFrame = ScreenInfo.frame(for: displayID)
+        let scale = screenFrame.width > 0 ? CGFloat(cgImage.width) / screenFrame.width : 1.0
         let size = CGSize(width: CGFloat(cgImage.width) / scale, height: CGFloat(cgImage.height) / scale)
         return NSImage(cgImage: cgImage, size: size)
     }

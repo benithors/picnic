@@ -23,6 +23,9 @@ struct EditorView: View {
                 MouseTrackingView(tool: model.tool) { point in
                     if !toolbarFrame.contains(point) {
                         model.updateCursorPoint(point)
+                        model.updateHoveredWindow(at: point)
+                    } else {
+                        model.clearHoveredWindow()
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -33,12 +36,22 @@ struct EditorView: View {
 
                 annotationLayer
 
+                if let windowRect = model.hoveredWindowRect {
+                    Path { path in
+                        path.addRect(windowRect)
+                    }
+                    .stroke(Color(red: 0.15, green: 0.82, blue: 0.72).opacity(0.9), lineWidth: 4)
+                    .allowsHitTesting(false)
+                } else if model.cropRect == nil {
+                    Rectangle()
+                        .stroke(Color(red: 0.15, green: 0.82, blue: 0.72).opacity(0.9), lineWidth: 4)
+                        .allowsHitTesting(false)
+                }
+
                 if let cropRect = model.cropRect {
                     cropOverlay(cropRect: cropRect, fullSize: proxy.size)
                         .allowsHitTesting(false)
                 }
-
-                editingOutline
 
                 toolbar
 
@@ -73,12 +86,6 @@ struct EditorView: View {
                 onClose()
             }
         }
-    }
-
-    private var editingOutline: some View {
-        Rectangle()
-            .stroke(Color(red: 0.15, green: 0.82, blue: 0.72).opacity(0.9), lineWidth: 4)
-            .allowsHitTesting(false)
     }
 
     private var toolbar: some View {

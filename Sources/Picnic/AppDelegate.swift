@@ -66,7 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func handleAbout() {
         let alert = NSAlert()
         alert.messageText = "About Benjamin Thorstensen"
-        alert.informativeText = ""
+        alert.informativeText = aboutVersionString()
 
         let stack = NSStackView()
         stack.orientation = .vertical
@@ -84,6 +84,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             stack.addArrangedSubview(imageView)
         }
 
+        let versionLabel = NSTextField(labelWithString: aboutVersionString())
+        versionLabel.alignment = .center
+        stack.addArrangedSubview(versionLabel)
+
         let label = NSTextField(labelWithString: "✨ Hi! Say hello anytime.\n🌐 kylo.at")
         label.alignment = .center
         label.maximumNumberOfLines = 0
@@ -92,6 +96,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.accessoryView = stack
         alert.addButton(withTitle: "OK")
         alert.runModal()
+    }
+
+    private func aboutVersionString() -> String {
+        let shortVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let buildVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        if let shortVersion, let buildVersion, shortVersion != buildVersion {
+            return "Picnic \(shortVersion) (\(buildVersion))"
+        }
+        if let shortVersion {
+            return "Picnic \(shortVersion)"
+        }
+        if let buildVersion {
+            return "Picnic \(buildVersion)"
+        }
+        return "Picnic version unknown"
     }
 
     private func loadPicnicLogo() -> NSImage? {

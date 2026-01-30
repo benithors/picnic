@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import SwiftUI
 
 final class EditorViewModel: ObservableObject {
@@ -9,7 +10,18 @@ final class EditorViewModel: ObservableObject {
         case text
     }
 
-    @Published var tool: Tool = .crop
+    private struct WindowCandidate {
+        let bounds: CGRect
+        let ownerName: String
+    }
+
+    @Published var tool: Tool = .select {
+        didSet {
+            if tool != .select {
+                clearHoveredWindow()
+            }
+        }
+    }
     @Published var cropRect: CGRect?
     @Published var arrows: [ArrowAnnotation] = []
     @Published var texts: [TextAnnotation] = []
@@ -18,6 +30,7 @@ final class EditorViewModel: ObservableObject {
     @Published var selectedTextID: UUID?
     @Published var selectedArrowID: UUID?
     @Published var lastCursorPoint: CGPoint?
+    @Published var hoveredWindowRect: CGRect?
 
     let image: NSImage
     private var viewSize: CGSize = .zero
@@ -29,9 +42,14 @@ final class EditorViewModel: ObservableObject {
     private var movingArrowEnd: CGPoint = .zero
 
     private static let textFont = NSFont.systemFont(ofSize: 20, weight: .semibold)
+    private let screenFrame: CGRect
+    private let displayScale: CGFloat
+    private let excludedOwnerName = (Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String) ?? "Picnic"
 
-    init(image: NSImage) {
+    init(image: NSImage, screenFrame: CGRect, displayScale: CGFloat) {
         self.image = image
+        self.screenFrame = screenFrame
+        self.displayScale = displayScale
     }
 
     func beginDrag(at point: CGPoint) {
@@ -41,6 +59,7 @@ final class EditorViewModel: ObservableObject {
         }
         switch tool {
         case .select:
+            updateHoveredWindow(at: point)
             beginSelection(at: point)
         case .crop:
             cropRect = CGRect(origin: point, size: .zero)
@@ -98,6 +117,9 @@ final class EditorViewModel: ObservableObject {
         if tool == .text {
             startTextEntry()
         } else {
+            if tool == .select {
+                cropRect = nil
+            }
             self.tool = tool
             editingTextID = nil
         }
@@ -135,8 +157,8 @@ final class EditorViewModel: ObservableObject {
         }
     }
 
-    func renderFinalImage() -> NSImage? {
-        let safeCrop = clampedCropRect()
+    func renderFinalImage(cropOverride: CGRect? = nil) -> NSImage? {
+        let safeCrop = clampedCropRect(cropOverride)
         let scale = scaleFactors()
         let scaledCrop = safeCrop.map { scaleRect($0, scale: scale) }
         let scaledArrows = arrows.map { scaleArrow($0, scale: scale) }
@@ -165,8 +187,8 @@ final class EditorViewModel: ObservableObject {
         )
     }
 
-    private func clampedCropRect() -> CGRect? {
-        guard let cropRect else { return nil }
+    private func clampedCropRect(_ override: CGRect? = nil) -> CGRect? {
+        guard let cropRect = override ?? cropRect else { return nil }
         let bounds = CGRect(origin: .zero, size: image.size)
         return cropRect.intersection(bounds)
     }
@@ -218,6 +240,130 @@ final class EditorViewModel: ObservableObject {
         lastCursorPoint = point
     }
 
+    func updateHoveredWindow(at point: CGPoint) {
+        guard tool == .select else {
+            clearHoveredWindow()
+            return
+        }
+        if point.y <= 2, viewSize != .zero {
+            let fullRect = CGRect(origin: .zero, size: viewSize)
+            if hoveredWindowRect != fullRect {
+                hoveredWindowRect = fullRect
+            }
+            return
+        }
+        let nextRect = windowRect(at: point)
+        if hoveredWindowRect != nextRect {
+            hoveredWindowRect = nextRect
+        }
+    }
+
+    func clearHoveredWindow() {
+        if hoveredWindowRect != nil {
+            hoveredWindowRect = nil
+        }
+    }
+
+    private func windowRect(at point: CGPoint) -> CGRect? {
+        guard screenFrame != .zero else { return nil }
+        guard let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
+            return nil
+        }
+
+        let scale = displayScale > 0 ? displayScale : 1.0
+        let screenPoint = CGPoint(
+            x: screenFrame.origin.x * scale + point.x * scale,
+            y: screenFrame.origin.y * scale + point.y * scale
+        )
+
+        var candidates: [WindowCandidate] = []
+        var primary: WindowCandidate?
+        for window in windowList {
+            guard let boundsDict = window[kCGWindowBounds as String] as? [String: Any],
+                  let bounds = CGRect(dictionaryRepresentation: boundsDict as CFDictionary) else {
+                continue
+            }
+            let ownerName = window[kCGWindowOwnerName as String] as? String ?? ""
+            if ownerName == excludedOwnerName || ownerName == "Dock" || ownerName == "Window Server" {
+                continue
+            }
+            let layer = window[kCGWindowLayer as String] as? Int ?? 0
+            if layer != 0 {
+                continue
+            }
+            let alpha = window[kCGWindowAlpha as String] as? Double ?? 1.0
+            if alpha <= 0.01 {
+                continue
+            }
+            let isOnscreen = window[kCGWindowIsOnscreen as String] as? Bool ?? true
+            if !isOnscreen {
+                continue
+            }
+            let candidate = WindowCandidate(bounds: bounds, ownerName: ownerName)
+            candidates.append(candidate)
+            if primary == nil, let hitBounds = hitTestBounds(bounds, at: screenPoint) {
+                primary = WindowCandidate(bounds: hitBounds, ownerName: ownerName)
+            }
+        }
+        guard let primary else { return nil }
+        let resolvedBounds = resolveBounds(primary: primary, from: candidates)
+        return convertToViewRect(resolvedBounds)
+    }
+
+    private func resolveBounds(primary: WindowCandidate, from candidates: [WindowCandidate]) -> CGRect {
+        var best = primary.bounds
+        for candidate in candidates {
+            guard candidate.ownerName == primary.ownerName else { continue }
+            guard candidate.bounds != primary.bounds else { continue }
+            guard candidate.bounds.contains(best) else { continue }
+            if isTitlebarContainer(container: candidate.bounds, content: best) {
+                best = candidate.bounds
+                break
+            }
+        }
+        for candidate in candidates {
+            guard candidate.ownerName == primary.ownerName else { continue }
+            guard candidate.bounds != best else { continue }
+            if isTitlebarAttachment(above: candidate.bounds, content: best) {
+                best = best.union(candidate.bounds)
+                break
+            }
+        }
+        return best
+    }
+
+    private func isTitlebarContainer(container: CGRect, content: CGRect) -> Bool {
+        let tolerance: CGFloat = 2
+        let leftAligned = abs(container.minX - content.minX) <= tolerance
+        let rightAligned = abs(container.maxX - content.maxX) <= tolerance
+        let bottomAligned = abs(container.minY - content.minY) <= tolerance
+        let heightDelta = container.height - content.height
+        return leftAligned && rightAligned && bottomAligned && heightDelta > 6 && heightDelta < 140
+    }
+
+    private func isTitlebarAttachment(above candidate: CGRect, content: CGRect) -> Bool {
+        let tolerance: CGFloat = 3
+        let leftAligned = abs(candidate.minX - content.minX) <= tolerance
+        let rightAligned = abs(candidate.maxX - content.maxX) <= tolerance
+        let verticalJoin = abs(candidate.minY - content.maxY) <= tolerance
+        let heightDelta = candidate.height
+        return leftAligned && rightAligned && verticalJoin && heightDelta > 6 && heightDelta < 140
+    }
+
+    private func hitTestBounds(_ bounds: CGRect, at point: CGPoint) -> CGRect? {
+        if bounds.contains(point) {
+            return bounds
+        }
+        return nil
+    }
+
+    private func convertToViewRect(_ rect: CGRect) -> CGRect {
+        let scale = displayScale > 0 ? displayScale : 1.0
+        let x = (rect.origin.x - screenFrame.origin.x * scale) / scale
+        let y = (rect.origin.y - screenFrame.origin.y * scale) / scale
+        return CGRect(x: x, y: y, width: rect.width / scale, height: rect.height / scale)
+    }
+
     private func beginSelection(at point: CGPoint) {
         if let textIndex = hitTestText(at: point) {
             let text = texts[textIndex]
@@ -253,6 +399,9 @@ final class EditorViewModel: ObservableObject {
 
     private func endSelectionDrag(isClick: Bool) {
         if isClick, selectedTextID == nil, selectedArrowID == nil {
+            if cropRect == nil, let hoveredWindowRect {
+                cropRect = hoveredWindowRect
+            }
             endTextEditing(switchToSelect: true)
         }
         movingTextID = nil

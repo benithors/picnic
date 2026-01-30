@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import SwiftUI
 
 final class OverlayWindowController {
@@ -6,11 +7,16 @@ final class OverlayWindowController {
     private let onClose: () -> Void
     private let viewModel: EditorViewModel
 
-    init(image: NSImage, onClose: @escaping () -> Void) {
+    init(image: NSImage, initialCropRect: CGRect? = nil, onClose: @escaping () -> Void) {
         self.onClose = onClose
-        self.viewModel = EditorViewModel(image: image)
+        let displayID = CGMainDisplayID()
+        let screenFrame = ScreenInfo.frame(for: displayID)
+        let displayScale = ScreenInfo.scale(for: displayID)
+        self.viewModel = EditorViewModel(image: image, screenFrame: screenFrame, displayScale: displayScale)
+        if let initialCropRect {
+            self.viewModel.cropRect = initialCropRect
+        }
 
-        let screenFrame = NSScreen.main?.frame ?? .zero
         let window = OverlayWindow(
             contentRect: screenFrame,
             styleMask: [.borderless],
@@ -58,7 +64,8 @@ final class OverlayWindowController {
     }
 
     private func handleCopy() {
-        guard let image = viewModel.renderFinalImage() else {
+        let override = viewModel.cropRect == nil ? viewModel.hoveredWindowRect : nil
+        guard let image = viewModel.renderFinalImage(cropOverride: override) else {
             AlertPresenter.showErrorAlert(message: "Failed to render the screenshot.")
             return
         }

@@ -10,10 +10,13 @@ timestamp="$(date +"%Y%m%d-%H%M%S")"
 log_file="${log_dir}/buildandcopy-${timestamp}.log"
 sign_identity="${SIGN_IDENTITY:-}"
 identity_file="${PWD}/.signing-identity"
+tap_cask_path="${PWD}/../homebrew-tap/Casks/picnic.rb"
 
 bundle_id_default="com.${USER:-user}.${app_name}"
 bundle_id="${BUNDLE_ID:-$bundle_id_default}"
 bundle_id="$(echo "$bundle_id" | tr '[:upper:]' '[:lower:]')"
+app_version="${APP_VERSION:-}"
+app_build="${APP_BUILD:-}"
 
 usage() {
     cat <<'EOF'
@@ -87,6 +90,22 @@ run_cmd() {
     fi
 }
 
+extract_tap_version() {
+    local version_line
+    if [[ -f "$tap_cask_path" ]]; then
+        if command -v rg >/dev/null 2>&1; then
+            version_line="$(rg -n '^\\s*version\\s+\"[^\"]+\"' "$tap_cask_path" || true)"
+        else
+            version_line="$(/usr/bin/grep -nE '^[[:space:]]*version[[:space:]]+"[^"]+"' "$tap_cask_path" || true)"
+        fi
+        if [[ -n "$version_line" ]]; then
+            echo "$version_line" | sed -E 's/.*version[[:space:]]+"([^"]+)".*/\1/'
+            return 0
+        fi
+    fi
+    return 1
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dev|--debug|-d)
@@ -143,6 +162,18 @@ fi
 mkdir -p "$log_dir"
 mkdir -p "${PWD}/build"
 
+if [[ -z "$app_version" ]]; then
+    if tap_version="$(extract_tap_version)"; then
+        app_version="$tap_version"
+    else
+        app_version="1.0"
+    fi
+fi
+
+if [[ -z "$app_build" ]]; then
+    app_build="$app_version"
+fi
+
 echo "Building ${build_mode} (${configuration_name}) configuration..."
 echo "Log: $log_file"
 run_cmd "build" swift build -c "$configuration_name" --product "$app_name"
@@ -185,9 +216,9 @@ cat > "${contents_dir}/Info.plist" <<EOF
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>${app_version}</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>${app_build}</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSHighResolutionCapable</key>

@@ -12,6 +12,7 @@
 - `./buildandcopy --dev` — builds, codesigns, and installs `Picnic.app` into `/Applications` (default is Debug).
 - `./buildandcopy --prod` — Release build and install.
 - `./buildandcopy --bundle-id com.example.picnic` — override bundle identifier when needed.
+- Versioning: keep `CFBundleShortVersionString` and `CFBundleVersion` aligned with the Homebrew tap cask version in `../homebrew-tap/Casks/picnic.rb` (the `buildandcopy` script reads this by default).
 
 ## Coding Style & Naming Conventions
 - Swift style matches the existing code: 4-space indentation, braces on the same line, and `final class` where applicable.
